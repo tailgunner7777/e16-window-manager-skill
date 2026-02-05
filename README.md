@@ -7,8 +7,9 @@ An advanced automation skill for the **Enlightenment e16** window manager. This 
 - **Frame-Accurate Positioning**: Uses Enlightenment's `eesh` Frame geometry to ensure windows include borders and title bars (no more offsets).
 - **Enlightenment Style Sync**: Automatically restores Border styles, Sticky states, Shaded (rolled-up) states, and Iconified (minimized) states.
 - **Deterministic Automation**: Includes bundled Python scripts for 100% reliable execution.
-- **Targeted Restoration**: Restore your entire workspace at boot, or just a single application (e.g., `./restore_e16.py MyApp`).
-- **High-Timeout Support**: Designed to handle heavy browser applications with a 120-second launch window.
+- **Targeted Restoration**: Restore your entire workspace at boot, or just a single application.
+- **Inventory Management**: Quickly list all configured applications.
+- **High-Timeout Support**: Designed to handle heavy applications with a 120-second launch window.
 
 ## 📦 Contents
 
@@ -43,8 +44,40 @@ To launch missing apps and snap everything back to the grid:
 python3 scripts/restore_e16.py --config my_layout.json
 ```
 
-### 3. Desktop Integration
+#### Targeted Restoration
+You can restore a specific application by passing its name:
+```bash
+python3 scripts/restore_e16.py --config my_layout.json "YouTube Music"
+```
+
+#### List Configured Apps
+To see what applications are defined in your configuration:
+```bash
+python3 scripts/restore_e16.py --config my_layout.json --list
+```
+
+### 3. Desktop Integration*
 Add the restore command to your `~/.e16/Start` script to have your workbench ready the moment you log in.
+
+### 📋 Sample Configuration (`dashboard_config.json`)
+```json
+[
+    {
+        "name": "My App",
+        "search_term": "My App Title",
+        "command": "/usr/bin/myapp --option",
+        "desktop": 1,
+        "x": 100,
+        "y": 100,
+        "width": 800,
+        "height": 600,
+        "border": "DEFAULT",
+        "iconified": false,
+        "sticky": false,
+        "shaded": false
+    }
+]
+```
 
 ## Requirements
 - Python 3.x
@@ -53,4 +86,6 @@ Add the restore command to your `~/.e16/Start` script to have your workbench rea
 - Gemini CLI
 
 ---
-*Created with Tailguner and an AI Engineer.*
+*Created by Tailgunner assisted with AI*
+
+*\*Footnote: Desktop integration via `~/.e16/Start` is documented but not extensively tested across all system configurations.*
