@@ -53,4 +53,4 @@ Add the restore command to your `~/.e16/Start` script to have your workbench rea
 - Gemini CLI
 
 ---
-*Created with ✦ by an AI Engineer.*
+*Created with Tailguner and an AI Engineer.*
