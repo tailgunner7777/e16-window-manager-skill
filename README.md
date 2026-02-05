@@ -59,7 +59,9 @@ python3 scripts/restore_e16.py --config my_layout.json --list
 ### 3. Desktop Integration*
 Add the restore command to your `~/.e16/Start` script to have your workbench ready the moment you log in.
 
-### 📋 Sample Configuration (`dashboard_config.json`)
+### 📋 Sample Configuration (`my_layout.json`)
+You can store your configuration JSON files anywhere (e.g., in the skill's `configs/` folder or your home directory).
+
 ```json
 [
     {
