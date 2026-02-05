@@ -7,7 +7,7 @@ An advanced automation skill for the **Enlightenment e16** window manager. This 
 - **Frame-Accurate Positioning**: Uses Enlightenment's `eesh` Frame geometry to ensure windows include borders and title bars (no more offsets).
 - **Enlightenment Style Sync**: Automatically restores Border styles, Sticky states, Shaded (rolled-up) states, and Iconified (minimized) states.
 - **Deterministic Automation**: Includes bundled Python scripts for 100% reliable execution.
-- **Targeted Restoration**: Restore your entire workspace at boot, or just a single application (e.g., `./restore_e16.py Kraken`).
+- **Targeted Restoration**: Restore your entire workspace at boot, or just a single application (e.g., `./restore_e16.py MyApp`).
 - **High-Timeout Support**: Designed to handle heavy browser applications with a 120-second launch window.
 
 ## 📦 Contents
