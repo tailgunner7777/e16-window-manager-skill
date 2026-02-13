@@ -59,6 +59,35 @@ python3 scripts/restore_e16.py --config my_layout.json --list
 ### 3. Desktop Integration*
 Add the restore command to your `~/.e16/Start` script to have your workbench ready the moment you log in.
 
+## Recovery
+
+If your e16 session locks up (windows won't move, keyboard unresponsive), run:
+```bash
+python3 scripts/recover_e16.py
+```
+
+This automatically diagnoses and fixes:
+- **Stopped e16 process** (caused by rogue SIGTSTP from some keyboards)
+- **Grabbed keyboard/pointer** (orphaned password dialogs holding modal grabs)
+- **Unresponsive IPC** (soft-restarts e16 without losing any windows)
+
+## Watchdog (Auto-Recovery)
+
+For automatic detection and recovery, install the background watchdog:
+
+```bash
+python3 scripts/install_watchdog.py
+```
+
+This adds the watchdog to your e16 Init/Exit hooks. It polls every 10 seconds and auto-recovers from lockups. Legitimate password dialogs are left alone — only orphaned/invisible grab holders are killed.
+
+**Manual control:**
+```bash
+python3 scripts/watchdog_e16.py &          # Start manually
+python3 scripts/watchdog_e16.py --stop     # Stop
+tail -f ~/.e16/watchdog.log                # Monitor
+```
+
 ### 📋 Sample Configuration (`my_layout.json`)
 You can store your configuration JSON files anywhere (e.g., in the skill's `configs/` folder or your home directory).
 
