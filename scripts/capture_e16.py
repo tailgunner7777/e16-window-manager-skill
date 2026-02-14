@@ -2,10 +2,10 @@
 """
 capture_e16.py — Captures the current Enlightenment e16 desktop layout.
 
-This script queries the X server and Enlightenment e16 (via eesh) to gather
-information about all open windows, including their positions, sizes,
-desktop assignments, and special e16 states (border, sticky, shaded, etc.).
-The results are saved to a JSON configuration file for later restoration.
+Usage:
+    python3 capture_e16.py --dashboard # ONLY update apps already in dashboard_config.json
+    python3 capture_e16.py --all       # Discovery mode: Capture EVERYTHING
+    python3 capture_e16.py "AppName"   # Capture only a specific application
 """
 
 import subprocess
@@ -13,6 +13,9 @@ import json
 import re
 import sys
 import os
+
+OUTPUT_FILE = "dashboard_config_captured.json"
+MASTER_CONFIG = "dashboard_config.json"
 
 def run_command(cmd):
     """Executes a shell command and returns the stripped stdout."""
@@ -71,7 +74,6 @@ def get_window_info(wid):
     # Client Geometry
     c_match = re.search(r"Client window\s+\S+\s+x,y\s*(-?\d+),\s*(-?\d+)\s+wxh\s*(\d+)x\s*(\d+)", eesh_out)
     if not c_match: return None
-    c_x, c_y = int(c_match.group(1)), int(c_match.group(2))
     c_width, c_height = int(c_match.group(3)), int(c_match.group(4))
 
     # Border sizes (Left, Right, Top, Bottom)
@@ -80,8 +82,7 @@ def get_window_info(wid):
     if lrtb_match:
         l, r, t, b = int(lrtb_match.group(1)), int(lrtb_match.group(2)), int(lrtb_match.group(3)), int(lrtb_match.group(4))
 
-    # CRITICAL: If the window is shaded, the Frame height reported by eesh is the SHADED height (e.g., 8px).
-    # We use the Client size + borders to represent the "true" unshaded frame size.
+    # Calculate unshaded frame size
     true_f_width = c_width + l + r
     true_f_height = c_height + t + b
 
@@ -111,20 +112,61 @@ def get_window_info(wid):
     }
 
 def main():
-    # Allow specifying an output file via command line argument
-    output_file = sys.argv[1] if len(sys.argv) > 1 else "dashboard_config_captured.json"
-    print(f"Capturing e16 layout to {output_file}...")
+    # Handle Arguments
+    args = sys.argv[1:]
     
+    if not args:
+        print(__doc__)
+        return
+
+    mode = "specific"
+    filter_target = args[0]
+
+    if "--all" in args:
+        mode = "all"
+    elif "--dashboard" in args:
+        mode = "dashboard"
+
+    # Load filters if in dashboard mode
+    dashboard_names = set()
+    dashboard_classes = set()
+    if mode == "dashboard":
+        if os.path.exists(MASTER_CONFIG):
+            with open(MASTER_CONFIG, 'r') as f:
+                cfg = json.load(f)
+                for app in cfg:
+                    if app.get("name"): dashboard_names.add(app["name"].lower())
+                    if app.get("class"): dashboard_classes.add(app["class"].lower())
+        else:
+            print(f"Error: {MASTER_CONFIG} not found. Cannot run in --dashboard mode.")
+            return
+
+    print(f"Capturing window state (Mode: {mode})...")
     wids = get_window_ids()
     apps = []
+    
     for wid in wids:
         info = get_window_info(wid)
-        if info: apps.append(info)
+        if not info: continue
+
+        should_capture = False
+        if mode == "all":
+            should_capture = True
+        elif mode == "specific":
+            if filter_target.lower() in info["name"].lower() or filter_target.lower() in info["class"].lower():
+                should_capture = True
+        elif mode == "dashboard":
+            if info["name"].lower() in dashboard_names or info["class"].lower() in dashboard_classes:
+                should_capture = True
+
+        if should_capture:
+            print(f"Captured: {info['name']} ({info['class']})")
+            apps.append(info)
             
-    # Save the captured layout to a JSON file
-    with open(output_file, "w") as f:
+    with open(OUTPUT_FILE, "w") as f:
         json.dump(apps, f, indent=4)
-    print(f"Success: Captured {len(apps)} windows.")
+        
+    print(f"\nSaved {len(apps)} entries to {OUTPUT_FILE}")
 
 if __name__ == "__main__":
     main()
