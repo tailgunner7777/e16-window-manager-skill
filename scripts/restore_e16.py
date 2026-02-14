@@ -39,13 +39,29 @@ def run_xdotool(cmd):
     return subprocess.run(full_cmd, shell=True, text=True, capture_output=True).stdout.strip()
 
 def find_window(search_term, app_class=None):
-    """Finds a window ID by name or class using xdotool."""
+    """Finds a window ID by name and/or class using xdotool."""
+    # If class is provided, it's our primary filter
     if app_class:
-        wid = run_xdotool(f"search --class '{app_class}' | head -n 1")
+        wids = run_xdotool(f"search --class '{app_class}'").splitlines()
+        if not wids:
+            return None
+            
+        # If name is also provided, try to match both
+        if search_term:
+            for wid in wids:
+                name = run_xdotool(f"getwindowname {wid}")
+                if search_term in name:
+                    return wid
+        
+        # If no name match found but class matched, return the first class match
+        return wids[0]
+
+    # Fallback to name only if no class was provided in config
+    if search_term:
+        wid = run_xdotool(f"search --name '{search_term}' | head -n 1")
         if wid: return wid
-    
-    wid = run_xdotool(f"search --name '{search_term}' | head -n 1")
-    return wid
+        
+    return None
 
 def main():
     import argparse
@@ -114,12 +130,10 @@ def main():
                 run_eesh(f"win_op {hex_wid} desk {desk}")
 
             # 4. Restore Geometry (x, y, width, height)
-            # Prefer directly captured client dimensions if available
             client_w = app.get("client_w")
             client_h = app.get("client_h")
             
             if client_w is None or client_h is None:
-                # Fallback to calculation if using old config
                 l = app.get("border_l", 0)
                 r = app.get("border_r", 0)
                 t = app.get("border_t", 0)
