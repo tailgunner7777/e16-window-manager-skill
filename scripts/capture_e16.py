@@ -52,21 +52,38 @@ def get_window_info(wid):
     eesh_out = run_command(f"eesh win_info {wid}")
     if not eesh_out: return None
 
-    # Frame Geometry: Uses e16 Frame coordinates (includes decorations) for 100% accuracy
-    f_match = re.search(r"Frame window\s+\S+\s+x,y\s+(-?\d+),\s+(-?\d+)\s+wxh\s+(\d+)x\s*(\d+)", eesh_out)
-    if not f_match: return None
-    
-    x, y = int(f_match.group(1)), int(f_match.group(2))
-    width, height = int(f_match.group(3)), int(f_match.group(4))
-
     # Detect e16-specific states
     border_style = "DEFAULT"
     b_match = re.search(r"Border\s+(\S+)", eesh_out)
     if b_match: border_style = b_match.group(1)
     
-    iconified = "Iconified    1" in eesh_out
-    sticky = "Sticky       1" in eesh_out
-    shaded = "Shaded       1" in eesh_out
+    iconified = re.search(r"Iconified\s+[1-9]", eesh_out) is not None
+    sticky = re.search(r"Sticky\s+[1-9]", eesh_out) is not None
+    shaded = re.search(r"Shaded\s+[1-9]", eesh_out) is not None
+
+    # Frame Geometry: Uses e16 Frame coordinates (includes decorations)
+    f_match = re.search(r"Frame window\s+\S+\s+x,y\s*(-?\d+),\s*(-?\d+)\s+wxh\s*(\d+)x\s*(\d+)", eesh_out)
+    if not f_match: return None
+    
+    x, y = int(f_match.group(1)), int(f_match.group(2))
+    width, height = int(f_match.group(3)), int(f_match.group(4))
+
+    # Border sizes (Left, Right, Top, Bottom)
+    l, r, t, b = 0, 0, 0, 0
+    lrtb_match = re.search(r"Border\s+\S+\s+lrtb\s+(\d+),(\d+),(\d+),(\d+)", eesh_out)
+    if lrtb_match:
+        l, r, t, b = int(lrtb_match.group(1)), int(lrtb_match.group(2)), int(lrtb_match.group(3)), int(lrtb_match.group(4))
+
+    # CRITICAL: If the window is shaded, the Frame height reported by eesh is the SHADED height (e.g., 8px).
+    # We must calculate the unshaded height to ensure correct restoration.
+    if shaded:
+        # Get the Client window dimensions to find the unshaded height
+        c_match = re.search(r"Client window\s+\S+\s+x,y\s*-?\d+,\s*-?\d+\s+wxh\s*(\d+)x\s*(\d+)", eesh_out)
+        if c_match:
+            c_width, c_height = int(c_match.group(1)), int(c_match.group(2))
+            # The unshaded Frame size is Client size + Borders
+            width = c_width + l + r
+            height = c_height + t + b
 
     # Attempt to find the launch command via the process ID
     pid_out = run_command(f"xprop -id {wid} _NET_WM_PID")
@@ -85,8 +102,11 @@ def get_window_info(wid):
         "command": cmd, 
         "class": app_class,
         "desktop": desktop,
-        "x": x, "y": y, "width": width, "height": height,
-        "border": border_style, "iconified": iconified, "sticky": sticky, "shaded": shaded
+        "x": x, "y": y, 
+        "width": width, "height": height,
+        "border": border_style,
+        "border_l": l, "border_r": r, "border_t": t, "border_b": b,
+        "iconified": iconified, "sticky": sticky, "shaded": shaded
     }
 
 def main():
