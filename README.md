@@ -33,9 +33,17 @@ An advanced automation skill for the **Enlightenment e16** window manager. This 
 ## 📖 How to Use
 
 ### 1. Capture your Layout
-Arrange your windows exactly how you want them on your Enlightenment desktops, then run:
+Arrange your windows exactly how you want them, then run:
+
 ```bash
-python3 scripts/capture_e16.py my_layout.json
+# Discovery mode: Captures everything
+python3 scripts/capture_e16.py --all
+
+# Focused mode: Only updates apps already in your config (Recommended)
+python3 scripts/capture_e16.py --dashboard
+
+# Targeted mode: Update just one app
+python3 scripts/capture_e16.py "Cool Retro Term"
 ```
 
 ### 2. Restore your Layout
@@ -43,6 +51,12 @@ To launch missing apps and snap everything back to the grid:
 ```bash
 python3 scripts/restore_e16.py --config my_layout.json
 ```
+
+#### High-Precision Logic
+The restoration engine now uses Enlightenment's `eesh` IPC and explicit client geometry. This ensures pixel-perfect placement even for windows with complex borders (like `ICONBOX`) or those in a **shaded** (rolled-up) state.
+
+#### Stricter Matching
+Windows are now matched by both **Name** and **Class** (`WM_CLASS`). This prevents the script from accidentally moving unrelated terminal windows that might share the same title.
 
 #### Targeted Restoration
 You can restore a specific application by passing its name:

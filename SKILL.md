@@ -6,18 +6,23 @@ description: Manage and automate Enlightenment e16 window manager layouts, borde
 # Enlightenment e16 Window Management
 
 ## Overview
-This skill provides deterministic tools for managing the Enlightenment e16 window manager. It uses `eesh` for style/desktop management, `xdotool` for window manipulation, and `python-xlib` for X11 grab detection.
+This skill provides deterministic tools for managing the Enlightenment e16 window manager. It uses `eesh` IPC for style/desktop/geometry management and `xdotool` for window discovery.
 
 ## Bundled Scripts
 
 ### 1. `capture_e16.py`
 Captures the current desktop layout into a portable JSON format.
-- **Source of Truth**: Uses Enlightenment Frame coordinates (via `eesh`) for 100% accurate placement.
-- **Usage**: `python3 scripts/capture_e16.py [output_file.json]`
+- **Precision**: Records both Frame and Client dimensions to ensure pixel-perfect restoration regardless of border style.
+- **Calculated Height**: Corrects for shaded windows by capturing their unshaded height.
+- **Modes**:
+    - `python3 scripts/capture_e16.py --dashboard`: ONLY update apps already in `dashboard_config.json` (Prevents pollution).
+    - `python3 scripts/capture_e16.py --all`: Discovery mode - capture every managed window.
+    - `python3 scripts/capture_e16.py "AppName"`: Targeted mode - capture/update only one specific app.
 
 ### 2. `restore_e16.py`
 Launches and repositions applications based on a configuration file.
-- **Features**: 120s launch timeout, targeted restoration, and e16 style sync (sticky, shaded, border).
+- **Features**: 120s launch timeout, e16 style sync (sticky, shaded, border).
+- **Stricter Matching**: Verifies windows by both **Name** and **Class** (`WM_CLASS`) to prevent accidental modification of unrelated windows.
 - **Usage**: `python3 scripts/restore_e16.py --config config.json [AppName]`
 
 ### 3. `recover_e16.py`
@@ -28,9 +33,7 @@ One-shot auto-recovery for a locked-up e16 session.
 ### 4. `watchdog_e16.py`
 Background daemon that monitors e16 health and auto-recovers.
 - **Poll interval**: 10 seconds (configurable via `--interval`).
-- **Safe detection**: Only kills orphaned/unmapped grab-holding dialogs. Leaves visible password prompts alone.
 - **Usage**: `python3 scripts/watchdog_e16.py [--interval 10] [--log ~/.e16/watchdog.log]`
-- **Stop**: `python3 scripts/watchdog_e16.py --stop`
 
 ### 5. `install_watchdog.py`
 Sets up auto-start of the watchdog via e16 Init/Exit hooks.
@@ -39,50 +42,24 @@ Sets up auto-start of the watchdog via e16 Init/Exit hooks.
 ## Core Technical Lessons
 
 ### Frame vs. Client Geometry
-- **CRITICAL**: Enlightenment requires **Frame** coordinates (which include decorations) for accurate placement. The bundled scripts handle this automatically.
+- **CRITICAL**: Enlightenment's `eesh` command requires **Client** dimensions (the inner application area) for sizing, while coordinates are usually based on the **Frame**. The scripts handle this conversion automatically using captured border offsets.
 
-### Hexadecimal Protocol
-- Enlightenment's IPC tool (`eesh`) requires window IDs in Hexadecimal format (`0x...`). The bundled scripts automatically convert `xdotool` decimal IDs to hex.
+### Robust Window Identification
+- Always capture and verify the `WM_CLASS`. Titles like "Terminal" or "necromancer@hexabit:~" are often duplicated; the window Class is the reliable "DNA" of the application.
 
 ### eesh Command Format
-- Use `eesh -e <command>` for single commands (not interactive mode).
-- Do NOT wrap the command in quotes: `eesh -e wl` (correct), `eesh -e "wl"` (creates IPC Error windows).
-
-## Troubleshooting: e16 Lockup Recovery
-
-### Root Cause: Keyboard Sends SIGTSTP
-Some keyboards (e.g., Protoarc) have function keys that send `SIGTSTP` to the focused process. If e16 receives this signal, it enters **stopped state** (`State: T` in `/proc/<pid>/status`). The entire window manager freezes — no window movement, no keyboard input, no IPC.
-
-### Root Cause: Orphaned Grab-Holding Dialogs
-Password dialogs like `gcr-prompter` (GNOME Keyring), `pinentry` (GPG), or `ssh-askpass` perform **modal keyboard grabs** for secure input. If these dialogs crash or become orphaned (unmapped but still holding the grab), all keyboard and pointer input is blocked.
-
-### Detection Logic (used by recovery and watchdog)
-1. **e16 stopped?** → Read `/proc/<pid>/status` for `State: T` → Send `SIGCONT` (always safe)
-2. **Keyboard/pointer grabbed?** → Test via `python-xlib` grab attempt (0=free, 1=grabbed)
-3. **eesh responsive?** → `eesh -e version` with 3s timeout
-4. **If grabs held + eesh unresponsive** → Kill ALL grab-holding dialogs, force-ungrab, soft-restart
-5. **If grabs held + eesh responsive** → Kill only orphaned (unmapped) dialogs
-
-### Manual Recovery
-```bash
-# Quick fix:
-python3 scripts/recover_e16.py
-
-# Or step-by-step:
-kill -CONT $(pgrep -x e16)                           # Resume stopped e16
-python3 -c "from Xlib import X, display; d=display.Display(':0'); d.ungrab_keyboard(X.CurrentTime); d.ungrab_pointer(X.CurrentTime); d.flush(); d.sync()"
-DISPLAY=:0 eesh -e restart                           # Soft restart e16
-```
+- Use `eesh -e <command>` for single commands.
+- Do NOT wrap the command in quotes: `eesh -e wl` (correct), `eesh -e "wl"` (incorrect).
 
 ## Workflows
 
 ### Setting up a Dashboard
-1. Arrange all tools manually on your desktops.
-2. Run `capture_e16.py` to generate the JSON config.
-3. Edit the JSON to add the launch `command` for each app (if not automatically detected).
-4. Run `restore_e16.py` to verify or automate the startup.
+1. Arrange your tools manually on your desktops.
+2. Run `python3 scripts/capture_e16.py --all` to discover all windows.
+3. Curate your `dashboard_config.json` with the apps you want.
+4. Future updates: Use `python3 scripts/capture_e16.py --dashboard` to refresh coordinates without adding new clutter.
 
-### Setting up the Watchdog
-1. Run `python3 scripts/install_watchdog.py` to hook into e16 Init/Exit.
-2. Start the watchdog now: `python3 scripts/watchdog_e16.py &`
-3. Verify: `cat /tmp/e16-watchdog.pid` and check `~/.e16/watchdog.log`.
+### Troubleshooting: e16 Lockup Recovery
+1. **e16 stopped?** → Read `/proc/<pid>/status` for `State: T` → Send `SIGCONT`.
+2. **Keyboard/pointer grabbed?** → Test via `python-xlib` grab attempt.
+3. **Recovery**: Run `python3 scripts/recover_e16.py` to fix automatically.
