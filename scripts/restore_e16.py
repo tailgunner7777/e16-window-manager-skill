@@ -29,7 +29,6 @@ def log(msg, log_file=None):
 
 def run_eesh(cmd):
     """Executes an eesh command via IPC."""
-    # Use eesh -e to avoid interactive mode and potential IPC error windows
     full_cmd = f"eesh -e {cmd}"
     return subprocess.run(full_cmd, shell=True, text=True, capture_output=True).stdout.strip()
 
@@ -38,29 +37,44 @@ def run_xdotool(cmd):
     full_cmd = f"xdotool {cmd}"
     return subprocess.run(full_cmd, shell=True, text=True, capture_output=True).stdout.strip()
 
-def find_window(search_term, app_class=None):
-    """Finds a window ID by name and/or class using xdotool."""
-    # If class is provided, it's our primary filter
-    if app_class:
-        wids = run_xdotool(f"search --class '{app_class}'").splitlines()
-        if not wids:
-            return None
-            
-        # If name is also provided, try to match both
-        if search_term:
-            for wid in wids:
-                name = run_xdotool(f"getwindowname {wid}")
-                if search_term in name:
-                    return wid
-        
-        # If no name match found but class matched, return the first class match
-        return wids[0]
+def get_window_class(wid):
+    """Returns the WM_CLASS for a window ID."""
+    out = subprocess.run(f"xprop -id {wid} WM_CLASS", shell=True, text=True, capture_output=True).stdout.strip()
+    # Format: WM_CLASS(STRING) = "name", "class"
+    if "=" in out:
+        return out.split("=")[1].strip().replace('"', '')
+    return ""
 
-    # Fallback to name only if no class was provided in config
-    if search_term:
-        wid = run_xdotool(f"search --name '{search_term}' | head -n 1")
-        if wid: return wid
+def find_window(search_term, app_class=None):
+    """Finds a window ID by name and class using xdotool and xprop."""
+    # 1. Search by name first (fastest)
+    wids = run_xdotool(f"search --name '{search_term}'").splitlines()
+    
+    # 2. Verify class if provided
+    if app_class:
+        for wid in wids:
+            actual_class = get_window_class(wid)
+            if app_class.lower() in actual_class.lower():
+                return wid
         
+        # If no name match with class, try searching by class directly
+        c_wids = run_xdotool(f"search --class '{app_class}'").splitlines()
+        for wid in c_wids:
+            actual_class = get_window_class(wid)
+            # Stricter check for class
+            if app_class.lower() in actual_class.lower():
+                # If search_term is provided, verify it too
+                if search_term:
+                    name = run_xdotool(f"getwindowname {wid}")
+                    if search_term.lower() in name.lower():
+                        return wid
+                else:
+                    return wid
+    else:
+        # No class provided, return first name match
+        if wids:
+            return wids[0]
+            
     return None
 
 def main():
@@ -105,10 +119,10 @@ def main():
         # Launch the application if it's missing and a command is provided
         if not wid and cmd:
             log(f"Launching {name}...", args.log)
-            # Use setsid to detach the process so it doesn't die when the script ends
+            # Use setsid to detach the process
             subprocess.Popen(f"setsid {cmd} > /dev/null 2>&1", shell=True)
-            # Wait up to 120 seconds for the window to appear
-            for _ in range(240): 
+            # Wait up to 60 seconds (reduced timeout for performance)
+            for _ in range(120): 
                 time.sleep(0.5)
                 wid = find_window(search, app_class)
                 if wid: break
@@ -116,6 +130,13 @@ def main():
         if wid:
             hex_wid = hex(int(wid))
             
+            # CRITICAL: Verify this is EXACTLY the window we want one last time
+            # by checking class before doing ANY eesh operations
+            actual_class = get_window_class(wid)
+            if app_class and app_class.lower() not in actual_class.lower():
+                log(f"  [!] Skipping {name} - class mismatch: expected {app_class}, found {actual_class}", args.log)
+                continue
+
             # 1. Bring window to front and ensure it's unshaded for state changes
             run_xdotool(f"windowactivate {wid}")
             run_eesh(f"win_op {hex_wid} shade off")
