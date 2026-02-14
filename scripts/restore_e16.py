@@ -100,7 +100,7 @@ def main():
         if wid:
             hex_wid = hex(int(wid))
             
-            # 1. Bring window to front and ensure it's unshaded for resizing
+            # 1. Bring window to front and ensure it's unshaded for state changes
             run_xdotool(f"windowactivate {wid}")
             run_eesh(f"win_op {hex_wid} shade off")
             
@@ -114,14 +114,18 @@ def main():
                 run_eesh(f"win_op {hex_wid} desk {desk}")
 
             # 4. Restore Geometry (x, y, width, height)
-            # eesh win_op size sets CLIENT size. We must convert from captured FRAME size.
-            l = app.get("border_l", 0)
-            r = app.get("border_r", 0)
-            t = app.get("border_t", 0)
-            b = app.get("border_b", 0)
+            # Prefer directly captured client dimensions if available
+            client_w = app.get("client_w")
+            client_h = app.get("client_h")
             
-            client_w = app['width'] - (l + r)
-            client_h = app['height'] - (t + b)
+            if client_w is None or client_h is None:
+                # Fallback to calculation if using old config
+                l = app.get("border_l", 0)
+                r = app.get("border_r", 0)
+                t = app.get("border_t", 0)
+                b = app.get("border_b", 0)
+                client_w = app['width'] - (l + r)
+                client_h = app['height'] - (t + b)
             
             # Set size (client-based)
             run_eesh(f"win_op {hex_wid} size {client_w} {client_h}")

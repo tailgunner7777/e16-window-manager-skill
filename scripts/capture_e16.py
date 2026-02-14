@@ -65,8 +65,14 @@ def get_window_info(wid):
     f_match = re.search(r"Frame window\s+\S+\s+x,y\s*(-?\d+),\s*(-?\d+)\s+wxh\s*(\d+)x\s*(\d+)", eesh_out)
     if not f_match: return None
     
-    x, y = int(f_match.group(1)), int(f_match.group(2))
-    width, height = int(f_match.group(3)), int(f_match.group(4))
+    f_x, f_y = int(f_match.group(1)), int(f_match.group(2))
+    f_width, f_height = int(f_match.group(3)), int(f_match.group(4))
+
+    # Client Geometry
+    c_match = re.search(r"Client window\s+\S+\s+x,y\s*(-?\d+),\s*(-?\d+)\s+wxh\s*(\d+)x\s*(\d+)", eesh_out)
+    if not c_match: return None
+    c_x, c_y = int(c_match.group(1)), int(c_match.group(2))
+    c_width, c_height = int(c_match.group(3)), int(c_match.group(4))
 
     # Border sizes (Left, Right, Top, Bottom)
     l, r, t, b = 0, 0, 0, 0
@@ -75,15 +81,9 @@ def get_window_info(wid):
         l, r, t, b = int(lrtb_match.group(1)), int(lrtb_match.group(2)), int(lrtb_match.group(3)), int(lrtb_match.group(4))
 
     # CRITICAL: If the window is shaded, the Frame height reported by eesh is the SHADED height (e.g., 8px).
-    # We must calculate the unshaded height to ensure correct restoration.
-    if shaded:
-        # Get the Client window dimensions to find the unshaded height
-        c_match = re.search(r"Client window\s+\S+\s+x,y\s*-?\d+,\s*-?\d+\s+wxh\s*(\d+)x\s*(\d+)", eesh_out)
-        if c_match:
-            c_width, c_height = int(c_match.group(1)), int(c_match.group(2))
-            # The unshaded Frame size is Client size + Borders
-            width = c_width + l + r
-            height = c_height + t + b
+    # We use the Client size + borders to represent the "true" unshaded frame size.
+    true_f_width = c_width + l + r
+    true_f_height = c_height + t + b
 
     # Attempt to find the launch command via the process ID
     pid_out = run_command(f"xprop -id {wid} _NET_WM_PID")
@@ -94,7 +94,7 @@ def get_window_info(wid):
         cmd = run_command(f"ps -p {pid} -o args=")
 
     # Skip system windows like the desktop itself
-    if name in ["Desktop", "e16"] or width < 10: return None
+    if name in ["Desktop", "e16"] or true_f_width < 10: return None
 
     return {
         "name": name,
@@ -102,8 +102,9 @@ def get_window_info(wid):
         "command": cmd, 
         "class": app_class,
         "desktop": desktop,
-        "x": x, "y": y, 
-        "width": width, "height": height,
+        "x": f_x, "y": f_y, 
+        "width": true_f_width, "height": true_f_height,
+        "client_w": c_width, "client_h": c_height,
         "border": border_style,
         "border_l": l, "border_r": r, "border_t": t, "border_b": b,
         "iconified": iconified, "sticky": sticky, "shaded": shaded
